@@ -2,9 +2,9 @@ import json
 import logging
 import pandas as pd
 from fastapi import FastAPI, HTTPException
-from dsba.model_registry import list_models_ids, load_model, load_model_metadata
+from dsba.model_registry import list_models_ids, load_model, load_model_metadata, save_model
 from dsba.model_prediction import classify_record
-from dsba.model_training import train_simple_classifier
+from dsba.model_training import run_training_pipeline
 
 logging.basicConfig(
     level=logging.INFO,
@@ -45,10 +45,11 @@ async def metadata_getter(model_id):
 
 
 # TO DO 
-# @app.post("/train/")
-# async def train_classifier(csv_file_or_path, target_column, model_id, test_size):
-#     model, metadata = train_simple_classifier(csv_file_or_path, target_column, model_id, test_size) 
-#     return {"model": model, "metadata": metadata}
+@app.post("/train/")
+async def train_classifier(data_source: str, target_column: str, model_id: str, test_size: float = 0.2):
+    model, metadata = run_training_pipeline(data_source, target_column, model_id, test_size) 
+    model_path, metadata_path = save_model(model, metadata)
+    return f"model trained successfully, this is you metadata: \n {metadata} \n you can access your model here {model_path} "
 
 
 @app.api_route("/predict/", methods=["GET", "POST"])

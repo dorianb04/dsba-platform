@@ -40,6 +40,8 @@ def save_model(model: BaseEstimator, metadata: ClassifierMetadata) -> None:
         )
         with open(model_metadata_path, "w") as f:
             json.dump(asdict(metadata), f, indent=4, default=str)
+            
+        return model_path, model_metadata_path
     except Exception as e:
         logger.exception(f"Failed to save model or metadata for '{metadata.id}': {e}")
         # Cleanup attempt
