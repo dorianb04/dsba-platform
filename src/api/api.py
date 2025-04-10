@@ -1,9 +1,10 @@
 import json
 import logging
+import pandas as pd
 from fastapi import FastAPI, HTTPException
 from dsba.model_registry import list_models_ids, load_model, load_model_metadata
 from dsba.model_prediction import classify_record
-
+from dsba.model_training import train_simple_classifier
 
 logging.basicConfig(
     level=logging.INFO,
@@ -13,13 +14,41 @@ logging.basicConfig(
 
 app = FastAPI()
 
-
 # using FastAPI with defaults is very convenient
 # we just add this "decorator" with the "route" we want.
 # If I deploy this app on "https//mywebsite.com", this function can be called by visiting "https//mywebsite.com/models/"
 @app.get("/models/")
 async def list_models():
     return list_models_ids()
+
+@app.get("/models/{model_id}/metadata")
+async def metadata_getter(model_id):
+    try:
+        metadata = load_model_metadata(model_id)
+        return metadata
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=404, 
+            detail=f"Model with ID '{model_id}' not found"
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.exception(f"Unexpected error retrieving metadata for model '{model_id}': {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+
+# TO DO 
+# @app.post("/train/")
+# async def train_classifier(csv_file_or_path, target_column, model_id, test_size):
+#     model, metadata = train_simple_classifier(csv_file_or_path, target_column, model_id, test_size) 
+#     return {"model": model, "metadata": metadata}
 
 
 @app.api_route("/predict/", methods=["GET", "POST"])
@@ -28,9 +57,7 @@ async def predict(query: str, model_id: str):
     Predict the target column of a record using a model.
     The query should be a json string representing a record.
     """
-    # This function is a bit naive and focuses on the logic.
-    # To make it more production-ready you would want to validate the input, manage authentication,
-    # process the various possible errors and raise an appropriate HTTP exception, etc.
+
     try:
         record = json.loads(query)
         model = load_model(model_id)
