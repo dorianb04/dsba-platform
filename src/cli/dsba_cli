@@ -1,17 +1,14 @@
-#!python3
-# This first line with #! ("shebang") tells the system that this is a script
-# Note that this file has been marked as "executable" for the OS using the command "chmod +x"
+#!/usr/bin/env python3
+
 import argparse
-from html import parser
 import logging
-import os
-import sys
-from typing import Any
 from pathlib import Path
+import os
 
 from dsba.data_ingestion import load_csv_from_path, write_csv_to_path
 from dsba.model_registry import list_models_ids, load_model, load_model_metadata
 from dsba.model_prediction import classify_dataframe
+from dsba.model_training import train_simple_classifier as train_evaluate_simple_classifier
 
 logging.basicConfig(
     level=logging.INFO,
@@ -21,24 +18,27 @@ logging.basicConfig(
 
 
 def create_parser():
-    """
-    We use the library argparse to define the functionalities of our CLI,
-    it will also do the magic to turn the command line typed by the user into an easy to use python object.
-
-    We want to define a commend line that does
-    dsba_cli [command] [options]
-    """
-    parser = argparse.ArgumentParser(description="DSBA Plaftorm CLI Tool")
+    parser = argparse.ArgumentParser(description="DSBA Platform CLI Tool")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    # List models command (it has no additional parameters)
+    # list models
     subparsers.add_parser("list", help="List available models")
 
-    # Predict command (it requires a model name, an input file and an output file)
+    # predict
     predict_parser = subparsers.add_parser("predict", help="Make predictions")
-    predict_parser.add_argument("--model", help="Model name to use", required=True)
-    predict_parser.add_argument("--input", help="Input file path", required=True)
-    predict_parser.add_argument("--output", help="Output file path", required=True)
+    predict_parser.add_argument("--model", help="Model ID to use", required=True)
+    predict_parser.add_argument("--input", help="Input CSV file path", required=True)
+    predict_parser.add_argument("--output", help="Output CSV file path", required=True)
+
+    # train
+    train_parser = subparsers.add_parser("train", help="Train a new model")
+    train_parser.add_argument("--data", help="Path or URL to training data (CSV)", required=True)
+    train_parser.add_argument("--output-dir", help="Directory to save trained model", required=True)
+    train_parser.add_argument("--config", help="Path to config.yaml (optional)", required=False)
+
+    # metadata
+    metadata_parser = subparsers.add_parser("metadata", help="Show model metadata")
+    metadata_parser.add_argument("--model", help="Model ID to inspect", required=True)
 
     return parser
 
@@ -54,10 +54,13 @@ def main():
         list_models()
     elif args.command == "predict":
         predict(args.model, args.input, args.output)
+    elif args.command == "train":
+        train(args.data, args.output_dir, args.config)
+    elif args.command == "metadata":
+        show_metadata(args.model)
 
 
-# We create a few light wrappers around our platform functionalities, just collect inputs and print the results.
-
+# Command functions
 
 def list_models() -> None:
     models = list_models_ids()
@@ -72,7 +75,23 @@ def predict(model_id: str, input_file: str, output_file: str) -> None:
     df = load_csv_from_path(input_file)
     predictions = classify_dataframe(model, df, metadata.target_column)
     write_csv_to_path(predictions, output_file)
-    print(f"Scored {len(predictions)} records")
+    print(f"✅ Scored {len(predictions)} records. Output saved to {output_file}")
+
+
+def train(data_path: str, output_dir: str, config_path: str | None) -> None:
+    model_id = train_evaluate_simple_classifier(
+        data_source=data_path,
+        config_path=config_path,
+        output_dir=output_dir
+    )
+    print(f"✅ Training complete! Model saved with ID: {model_id}")
+
+
+def show_metadata(model_id: str) -> None:
+    metadata = load_model_metadata(model_id)
+    print("📄 Model Metadata:")
+    for key, value in metadata.dict().items():  # assuming metadata is a Pydantic model
+        print(f"{key}: {value}")
 
 
 if __name__ == "__main__":
