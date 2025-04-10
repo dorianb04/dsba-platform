@@ -60,6 +60,7 @@ dev = [
     # It ensures that the code is doing what you expects but it also makes it safe to modify existing code
     # since introducing new bugs has good chances to be detected if the tests are exahstive and well designed
     "pytest>=7.0.0",
+    "pytest-mock>=3.14.0",
 
     # Ruff is a popular library for formatting and linting code
     # Formatting is about purely stylistic issues, like indentation, line length, etc.
