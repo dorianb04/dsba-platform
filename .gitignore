@@ -116,6 +116,7 @@ cython_debug/
 
 # DSBA Platform Specific
 models_registry/
+models/
 data/ # If creating local data for testing
 *.pkl
 *.json # Exclude model metadata from git, should be generated

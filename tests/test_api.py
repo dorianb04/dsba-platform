@@ -10,13 +10,12 @@ from pytest_mock import MockerFixture
 # Import the FastAPI app instance correctly
 from src.api.api import app
 
-# --- Constants for Test Data (assuming these are defined/correct) ---
+# --- Constants for Test Data ---
 TEST_DATA_DIR = Path("tests/data")
 LOCAL_SAMPLE_CSV = TEST_DATA_DIR / "sample_training_data.csv"
-# Replace with your actual raw GitHub URL once the file is pushed
-GITHUB_USER = "dorianb04"  # Replace if different
-REPO_NAME = "dsba-platform"  # Replace if different
-BRANCH = "main"  # Or the branch where the file exists
+GITHUB_USER = "dorianb04"
+REPO_NAME = "dsba-platform"
+BRANCH = "main"
 URL_SAMPLE_CSV = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/{BRANCH}/tests/data/sample_training_data.csv"
 
 
@@ -130,7 +129,7 @@ def test_train_success(client: TestClient, mocker: MockerFixture):
     model_id = "new_trained_model"
     target = "target"
     # Use the actual local path for the test
-    data_src = str(LOCAL_SAMPLE_CSV.resolve())  # Ensure absolute path if needed
+    data_src = str(LOCAL_SAMPLE_CSV.resolve())
 
     assert LOCAL_SAMPLE_CSV.is_file(), "Sample data file must exist for test setup"
 

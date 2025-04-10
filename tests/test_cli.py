@@ -1,228 +1,243 @@
-# tests/test_cli.py
-import pytest
-import subprocess
-import sys
 from pathlib import Path
+
 import pandas as pd
+import pytest
+
+# Only import specific exceptions if checking for them by type explicitly
+# Import classes/functions from dsba library that are needed for MOCKING
+from dsba.model_registry import (
+    ClassifierMetadata,
+)
 from pytest_mock import MockerFixture
-import os
-import argparse
 
-# --- Import MODULES instead of specific functions ---
-try:
-    # Import the modules themselves
-    import dsba.model_registry
-    import dsba.data_ingestion
-    import dsba.model_prediction
-    # Keep direct import for classes/constants if needed
-    from dsba.model_registry import ClassifierMetadata
-except ImportError:
-    # Fallback if running pytest directly from the tests directory
-    import sys
-    sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-    import dsba.model_registry
-    import dsba.data_ingestion
-    import dsba.model_prediction
-    from dsba.model_registry import ClassifierMetadata
+from src.cli.dsba_cli import (
+    create_parser,
+    list_models_cli,
+    predict_batch_cli,
+    show_metadata_cli,
+    train_model_cli,
+)
 
-# --- Keep setup for subprocess test (missing args) ---
-CLI_SCRIPT_PATH = Path(__file__).parent.parent / "src" / "cli" / "dsba_cli"
-CLI_ENTRY_POINT = [sys.executable, str(CLI_SCRIPT_PATH)]
+# --- Fixtures ---
+
 
 @pytest.fixture(scope="function")
-def mock_cli_registry(tmp_path: Path, mocker: MockerFixture, monkeypatch):
-    """Mocks the model registry path"""
+def mock_cli_config(tmp_path: Path, mocker: MockerFixture):
+    """Mocks config functions used by library calls needed by CLI functions."""
     models_dir = tmp_path / "cli_test_registry"
     models_dir.mkdir()
-    monkeypatch.setenv("DSBA_MODELS_ROOT_PATH", str(models_dir))
-    mocker.patch('dsba.model_registry._get_models_dir', return_value=models_dir)
+    mocker.patch("dsba.config.get_models_root_path", return_value=models_dir)
+    mocker.patch("dsba.config.load_config", return_value={})
     yield models_dir
 
+
 @pytest.fixture
-def sample_csv_data_path(tmp_path: Path) -> Path:
-    """Provides the path to the existing sample CSV data."""
-    source_path = Path("tests/data/sample_training_data.csv")
-    if not source_path.exists():
-         pytest.fail(f"Sample data file not found at {source_path}")
-    return source_path.resolve()
+def sample_cli_csv_file(tmp_path: Path) -> Path:
+    """Creates a sample CSV file in a temp dir for CLI tests."""
+    data = {"featureA": [1, 2, 3], "target": [0, 1, 0]}
+    df = pd.DataFrame(data)
+    csv_path = tmp_path / "cli_sample_data.csv"
+    df.to_csv(csv_path, index=False)
+    return csv_path
 
-# --- Refactored CLI Logic Tests ---
 
-def test_cli_list_logic_empty(mock_cli_registry: Path, mocker: MockerFixture, capsys):
-    """Test logic replicating 'list' command with an empty registry."""
-    # Patch the function in its original module
-    mock_list_ids = mocker.patch('dsba.model_registry.list_models_ids', return_value=[])
+# --- Basic Argparse Test ---
 
-    # Simulate the print logic, calling via module namespace
-    models = dsba.model_registry.list_models_ids() # Call via module
-    print("Available models:")
-    for model in models:
-        print(f"- {model}")
 
+def test_cli_parser_defines_commands():
+    """Check if main commands are defined."""
+    parser = create_parser()
+    parser.parse_args(["list"])
+    parser.parse_args(["metadata", "some_id"])
+    parser.parse_args(
+        ["train", "--model-id", "id", "--data-source", "src", "--target-column", "t"]
+    )
+    parser.parse_args(
+        ["predict", "--model-id", "id", "--input", "in.csv", "--output", "out.csv"]
+    )
+
+
+def test_cli_train_requires_args():
+    """Check train command requires arguments using parse_args."""
+    parser = create_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["train", "--model-id", "m"])
+
+
+# --- Test Command Functions Directly ---
+
+
+def test_list_models_cli_success(mock_cli_config: Path, mocker: MockerFixture, capsys):
+    """Test list_models_cli prints expected output."""
+    expected_models = ["model1", "model2"]
+    # Mock the library function CALLED BY list_models_cli
+    mock_list_ids = mocker.patch(
+        "src.cli.dsba_cli.list_models_ids", return_value=expected_models
+    )
+
+    list_models_cli()
     captured = capsys.readouterr()
-    assert "Available models:" in captured.out
-    assert "- " not in captured.out
-    # Now the mock should have been called
+
     mock_list_ids.assert_called_once()
+    assert "Available models:" in captured.out
+    assert "- model1" in captured.out
+    assert "- model2" in captured.out
 
 
-def test_cli_list_logic_success(mock_cli_registry: Path, mocker: MockerFixture, capsys):
-    """Test logic replicating 'list' command when models exist."""
-    mock_model_ids = ["model_one", "model_two"]
-    # Patch the function in its original module
-    mock_list_ids = mocker.patch('dsba.model_registry.list_models_ids', return_value=mock_model_ids)
-
-    # Simulate the print logic, calling via module namespace
-    models = dsba.model_registry.list_models_ids() # Call via module
-    print("Available models:")
-    for model in models:
-        print(f"- {model}")
-
+def test_list_models_cli_empty(mock_cli_config: Path, mocker: MockerFixture, capsys):
+    """Test list_models_cli handles empty list."""
+    mock_list_ids = mocker.patch("src.cli.dsba_cli.list_models_ids", return_value=[])
+    list_models_cli()
     captured = capsys.readouterr()
-    assert "Available models:" in captured.out
-    assert "- model_one" in captured.out # This should pass now
-    assert "- model_two" in captured.out
     mock_list_ids.assert_called_once()
+    assert "No models found" in captured.out
 
 
-def test_cli_predict_logic_success(mock_cli_registry: Path, sample_csv_data_path: Path, mocker: MockerFixture, capsys):
-    """Test logic replicating successful 'predict' command."""
-    model_id = "cli_predict_test"
+def test_show_metadata_cli_success(
+    mock_cli_config: Path, mocker: MockerFixture, capsys
+):
+    """Test show_metadata_cli prints formatted metadata."""
+    model_id = "meta_model"
+    mock_meta_obj = ClassifierMetadata(
+        id=model_id,
+        target_column="t",
+        algorithm="Algo",
+        created_at="ts",
+        hyperparameters={"p": 1},
+        description="d",
+        performance_metrics={"f1": 0.5},
+    )
+    # Mock the library function CALLED BY show_metadata_cli
+    mock_load = mocker.patch(
+        "src.cli.dsba_cli.load_model_metadata", return_value=mock_meta_obj
+    )
+    # Mock json.dumps used inside show_metadata_cli for predictable output checks
+    mocker.patch(
+        "src.cli.dsba_cli.json.dumps", return_value='{"algorithm": "Algo", "f1": 0.5}'
+    )
+
+    show_metadata_cli(model_id)
+    captured = capsys.readouterr()
+
+    mock_load.assert_called_once_with(model_id)
+    assert f"--- Metadata for Model: {model_id} ---" in captured.out
+    assert '{"algorithm": "Algo", "f1": 0.5}' in captured.out
+
+
+def test_show_metadata_cli_not_found(mock_cli_config: Path, mocker: MockerFixture):
+    """Test show_metadata_cli handles FileNotFoundError from load_model_metadata."""
+    model_id = "ghost"
+    error_msg = f"Metadata file not found for model ID '{model_id}'"
+    # Mock the library function CALLED BY show_metadata_cli
+    mock_load = mocker.patch(
+        "src.cli.dsba_cli.load_model_metadata", side_effect=FileNotFoundError(error_msg)
+    )
+
+    # Check if the function raises the specific error it's supposed to
+    with pytest.raises(FileNotFoundError, match=error_msg):
+        show_metadata_cli(model_id)
+    mock_load.assert_called_once_with(model_id)
+
+
+def test_train_model_cli_success(
+    mock_cli_config: Path, sample_cli_csv_file: Path, mocker: MockerFixture, capsys
+):
+    """Test train_model_cli success path."""
+    model_id = "train_cli_ok"
     target = "target"
-    input_path = str(sample_csv_data_path)
-    output_path = str(mock_cli_registry / "cli_predictions.csv")
-
-    mock_model_obj = mocker.MagicMock()
-    mock_metadata_obj = ClassifierMetadata( # ok to keep direct import for class
-        id=model_id, target_column=target, created_at="", algorithm="", hyperparameters={}, description="", performance_metrics={}
+    data_src = str(sample_cli_csv_file)
+    test_size = 0.25
+    mock_model = mocker.MagicMock()
+    mock_meta = ClassifierMetadata(
+        id=model_id, target_column=target, performance_metrics={"f1_score": 0.98}
     )
-    input_df = pd.read_csv(input_path)
-    expected_output_df = input_df.copy()
-    expected_output_df[target] = [0] * (len(expected_output_df) // 2) + [1] * (len(expected_output_df) - len(expected_output_df) // 2)
+    # Mock the library functions CALLED BY train_model_cli
+    mock_pipeline = mocker.patch(
+        "src.cli.dsba_cli.run_training_pipeline", return_value=(mock_model, mock_meta)
+    )
+    mock_save = mocker.patch("src.cli.dsba_cli.save_model", return_value=None)
+    # Mock json.dumps used inside train_model_cli
+    mocker.patch("src.cli.dsba_cli.json.dumps", return_value='{"f1_score": 0.98}')
 
-    # Mock the underlying functions (targets are correct)
-    mock_load_model = mocker.patch('dsba.model_registry.load_model', return_value=mock_model_obj)
-    mock_load_metadata = mocker.patch('dsba.model_registry.load_model_metadata', return_value=mock_metadata_obj)
-    mock_load_csv = mocker.patch('dsba.data_ingestion.load_csv_from_path', return_value=input_df)
-    mock_classify = mocker.patch('dsba.model_prediction.classify_dataframe', return_value=expected_output_df)
-    mock_write_csv = mocker.patch('dsba.data_ingestion.write_csv_to_path', return_value=None)
-
-    # --- Simulate the logic, calling via module namespace ---
-    model = dsba.model_registry.load_model(model_id) # Call via module
-    metadata = dsba.model_registry.load_model_metadata(model_id) # Call via module
-    df = dsba.data_ingestion.load_csv_from_path(input_path) # Call via module
-    predictions = dsba.model_prediction.classify_dataframe(model, df, metadata.target_column) # Call via module
-    dsba.data_ingestion.write_csv_to_path(predictions, output_path) # Call via module
-    print(f"Scored {len(predictions)} records")
-    # --- End simulation ---
-
+    train_model_cli(model_id, data_src, target, test_size)  # Call directly
     captured = capsys.readouterr()
-    assert f"Scored {len(expected_output_df)} records" in captured.out
 
-    # Verify mocks (should pass now)
-    mock_load_model.assert_called_once_with(model_id)
-    mock_load_metadata.assert_called_once_with(model_id)
-    mock_load_csv.assert_called_once_with(input_path)
-    mock_classify.assert_called_once_with(mock_model_obj, input_df, target)
-    mock_write_csv.assert_called_once()
-    write_call_args, _ = mock_write_csv.call_args
-    pd.testing.assert_frame_equal(write_call_args[0], expected_output_df)
-    assert write_call_args[1] == output_path
-
-
-def test_cli_predict_logic_input_not_found(mock_cli_registry: Path, mocker: MockerFixture):
-    """Test logic replicating 'predict' command when input file is missing."""
-    model_id = "any_model"
-    non_existent_input = str(mock_cli_registry / "no_such_input.csv")
-    output_path = str(mock_cli_registry / "output.csv")
-
-    # Mock successful model loading
-    mocker.patch('dsba.model_registry.load_model', return_value=mocker.MagicMock())
-    mocker.patch('dsba.model_registry.load_model_metadata', return_value=mocker.MagicMock(target_column='target'))
-    # Mock load_csv_from_path to raise the error
-    error_message = "Input file not found!"
-    mock_load_csv = mocker.patch('dsba.data_ingestion.load_csv_from_path', side_effect=FileNotFoundError(error_message))
-    # Mock others that shouldn't be called
-    mock_classify = mocker.patch('dsba.model_prediction.classify_dataframe')
-    mock_write_csv = mocker.patch('dsba.data_ingestion.write_csv_to_path')
-
-    # --- Simulate the logic ---
-    with pytest.raises(FileNotFoundError, match=error_message):
-        model = dsba.model_registry.load_model(model_id) # Mocked, returns MagicMock
-        metadata = dsba.model_registry.load_model_metadata(model_id) # Mocked, returns MagicMock
-        df = dsba.data_ingestion.load_csv_from_path(non_existent_input) # This call hits the mock and raises!
-        # These lines are not reached:
-        # predictions = dsba.model_prediction.classify_dataframe(model, df, metadata.target_column)
-        # dsba.data_ingestion.write_csv_to_path(predictions, output_path)
-        # print(f"Scored {len(predictions)} records")
-    # --- End simulation ---
-
-    # Verify mocks
-    mock_load_csv.assert_called_once_with(non_existent_input)
-    mock_classify.assert_not_called()
-    mock_write_csv.assert_not_called()
-
-
-def test_cli_predict_logic_model_not_found(mock_cli_registry: Path, sample_csv_data_path: Path, mocker: MockerFixture):
-    """Test logic replicating 'predict' command when model file is missing."""
-    model_id = "ghost_model"
-    input_path = str(sample_csv_data_path)
-    output_path = str(mock_cli_registry / "output.csv")
-
-    # Mock load_model to raise the error
-    error_message = f"Model file for '{model_id}' not found."
-    mock_load_model = mocker.patch('dsba.model_registry.load_model', side_effect=FileNotFoundError(error_message))
-    # Mock others that shouldn't be called
-    mock_load_metadata = mocker.patch('dsba.model_registry.load_model_metadata')
-    mock_load_csv = mocker.patch('dsba.data_ingestion.load_csv_from_path')
-    mock_classify = mocker.patch('dsba.model_prediction.classify_dataframe')
-    mock_write_csv = mocker.patch('dsba.data_ingestion.write_csv_to_path')
-
-    # --- Simulate the logic ---
-    with pytest.raises(FileNotFoundError, match=error_message):
-        model = dsba.model_registry.load_model(model_id) # This call hits the mock and raises!
-        # These lines are not reached:
-        # metadata = dsba.model_registry.load_model_metadata(model_id)
-        # df = dsba.data_ingestion.load_csv_from_path(input_path)
-        # predictions = dsba.model_prediction.classify_dataframe(model, df, metadata.target_column)
-        # dsba.data_ingestion.write_csv_to_path(predictions, output_path)
-        # print(f"Scored {len(predictions)} records")
-    # --- End simulation ---
-
-    # Verify mocks
-    mock_load_model.assert_called_once_with(model_id)
-    mock_load_metadata.assert_not_called() # Should not be called if load_model fails first
-    mock_load_csv.assert_not_called()
-    mock_classify.assert_not_called()
-    mock_write_csv.assert_not_called()
-
-
-# --- Keep subprocess test for arg parsing ---
-# (run_cli_command helper and test_cli_predict_missing_args remain unchanged)
-# Helper function (only needed if keeping subprocess tests)
-def run_cli_command(args: list[str], env: dict = None) -> subprocess.CompletedProcess:
-    """Helper function to run the CLI script with arguments."""
-    current_env = os.environ.copy()
-    if env:
-        current_env.update(env)
-
-    src_dir = str(Path(__file__).parent.parent / "src")
-    python_path = current_env.get("PYTHONPATH", "")
-    if src_dir not in python_path.split(os.pathsep):
-         current_env["PYTHONPATH"] = f"{src_dir}{os.pathsep}{python_path}"
-
-    result = subprocess.run(
-        [*CLI_ENTRY_POINT, *args], capture_output=True, text=True, check=False, env=current_env
+    mock_pipeline.assert_called_once_with(
+        data_source=data_src,
+        target_column=target,
+        model_id=model_id,
+        test_size=test_size,
     )
-    if result.returncode != 0 and "usage:" not in result.stderr:
-        print(f"CLI Error:\n{result.stderr}")
-    return result
+    mock_save.assert_called_once_with(mock_model, mock_meta)
+    assert f"Model '{model_id}' trained and saved successfully" in captured.out
+    assert '{"f1_score": 0.98}' in captured.out  # Check mocked json output
 
-def test_cli_predict_missing_args(mock_cli_registry: Path):
-    """Test 'predict' command with missing required arguments (using subprocess)."""
-    args = ["predict", "--model", "some_model"]
-    result = run_cli_command(args, env={"DSBA_MODELS_ROOT_PATH": str(mock_cli_registry)})
 
-    assert result.returncode != 0
-    assert "usage: dsba_cli predict" in result.stderr
-    assert "the following arguments are required: --input, --output" in result.stderr
+def test_train_model_cli_fails(
+    mock_cli_config: Path, sample_cli_csv_file: Path, mocker: MockerFixture
+):
+    """Test train_model_cli handles error from run_training_pipeline."""
+    error_msg = "Pipeline failure"
+    # Mock the library function CALLED BY train_model_cli
+    mock_pipeline = mocker.patch(
+        "src.cli.dsba_cli.run_training_pipeline", side_effect=RuntimeError(error_msg)
+    )
+    mock_save = mocker.patch("src.cli.dsba_cli.save_model")  # Mock save as well
+
+    # Check if the function raises the specific error it's supposed to
+    with pytest.raises(RuntimeError, match=f"Training process failed: {error_msg}"):
+        train_model_cli("id", str(sample_cli_csv_file), "target", 0.2)
+
+    mock_pipeline.assert_called_once()
+    mock_save.assert_not_called()  # Ensure save wasn't called
+
+
+def test_predict_batch_cli_success(
+    mock_cli_config: Path, sample_cli_csv_file: Path, mocker: MockerFixture, capsys
+):
+    """Test predict_batch_cli success path."""
+    model_id = "predict_cli_ok"
+    input_path = sample_cli_csv_file
+    output_path = mock_cli_config.parent / "predict_cli_output.csv"
+    mock_model = mocker.MagicMock()
+    mock_meta = ClassifierMetadata(id=model_id, target_column="target")
+    mock_df = pd.DataFrame({"featureA": [1], "target": [0]})
+    mock_preds = mock_df.copy()
+    mock_preds["target"] = [1]
+
+    # Mock all library functions CALLED BY predict_batch_cli
+    mock_load_model = mocker.patch(
+        "src.cli.dsba_cli.load_model", return_value=mock_model
+    )
+    mock_load_meta = mocker.patch(
+        "src.cli.dsba_cli.load_model_metadata", return_value=mock_meta
+    )
+    mock_load_csv = mocker.patch(
+        "src.cli.dsba_cli.load_csv_from_path", return_value=mock_df
+    )
+    mock_classify = mocker.patch(
+        "src.cli.dsba_cli.classify_dataframe", return_value=mock_preds
+    )
+    mock_write_csv = mocker.patch(
+        "src.cli.dsba_cli.write_csv_to_path", return_value=None
+    )
+
+    predict_batch_cli(model_id, input_path, output_path)  # Call directly
+    captured = capsys.readouterr()
+
+    mock_load_model.assert_called_once_with(model_id)
+    mock_load_meta.assert_called_once_with(model_id)
+    mock_load_csv.assert_called_once_with(input_path)
+    mock_classify.assert_called_once()  # Could add arg checks if needed
+    mock_write_csv.assert_called_once_with(mock_preds, output_path)
+    assert f"Predictions saved to {output_path}" in captured.out
+    assert f"Scored {len(mock_preds)} records" in captured.out
+
+
+def test_predict_batch_cli_input_not_found(mock_cli_config: Path):
+    """Test predict_batch_cli handles input FileNotFoundError."""
+    input_path = Path("non/existent/input.csv")
+    output_path = mock_cli_config.parent / "output.csv"
+    # This error is raised inside predict_batch_cli before main handler
+    with pytest.raises(FileNotFoundError):
+        predict_batch_cli("any_model", input_path, output_path)
