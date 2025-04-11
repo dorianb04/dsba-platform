@@ -312,3 +312,8 @@ This project includes unit and integration tests using `pytest`. Ensure developm
 ```bash
 pytest
 ```
+
+Pre-commit hooks can also be configured using 
+```bash
+pre-commit run --all-files
+```
