@@ -280,6 +280,15 @@ This will deploy the container image to Azure Container Instances (ACI) with per
     ```
 2.  **Test API:** Open the **Swagger UI URL** in your browser. Use the interface or tools like `curl`/Python client to interact with your deployed API endpoints. Train a model via the API and verify it appears in your Azure File Share (`modelshare`).
 
+For example you can try the final api on production via the links below:
+```powershell
+-----------------------------------------------------
+Deployment Succeeded and Container is Running!
+API URL: http://dsba-mlops-api-12.francecentral.azurecontainer.io:8000
+Swagger UI: http://dsba-mlops-api-12.francecentral.azurecontainer.io:8000/docs
+-----------------------------------------------------
+```
+
 ## Step 8: Clean Up (Optional)
 
 * When finished, delete the Azure resources to avoid ongoing costs:
