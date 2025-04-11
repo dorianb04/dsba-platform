@@ -119,7 +119,7 @@ This project uses environment variables for configuration, primarily for the mod
     ```
 3.  **Ensure `.gitignore`:** Verify that `.env` is listed in your `.gitignore` file.
 
-*Note: The `src/dsba/config.py` script uses `python-dotenv` to automatically load variables from the `.env` file when running locally.*
+> **Note:** The `src/dsba/config.py` script uses `python-dotenv` to automatically load variables from the `.env` file when running locally.*
 
 ## Step 3: Local Usage Verification
 
