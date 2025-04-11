@@ -241,8 +241,11 @@ def test_train_invalid_request_body(client: TestClient):
 def test_predict_success(client: TestClient, mocker: MockerFixture):
     """Test POST /predict/ success path with JSON body."""
     model_id = "predictor_model"
-    features_dict = {"featureA": 10.5, "featureB": "value2"}
-    expected_prediction = 0
+    feature_sets = [
+        {"featureA": 10.5, "featureB": "value1"},
+        {"featureA": 20.7, "featureB": "value2"},
+    ]
+    expected_predictions = [0, 1]
 
     # Mock underlying functions
     mock_model_obj = mocker.MagicMock()
@@ -254,27 +257,38 @@ def test_predict_success(client: TestClient, mocker: MockerFixture):
     mock_load_meta = mocker.patch(
         "src.api.api.load_model_metadata", return_value=mock_meta
     )
-    mock_classify = mocker.patch(
-        "src.api.api.classify_record", return_value=expected_prediction
-    )
+    
+    # Setup the classify_record mock to return different values based on input
+    mock_classify = mocker.patch("src.api.api.classify_record")
+    mock_classify.side_effect = expected_predictions
 
     # Prepare request body matching PredictRequest
-    request_data = {"model_id": model_id, "features": features_dict}
+    request_data = {"model_id": model_id, "features": feature_sets}
 
     response = client.post("/predict/", json=request_data)
 
     assert response.status_code == 200
-    assert response.json() == {"model_id": model_id, "prediction": expected_prediction}
+    response_json = response.json()
+    assert isinstance(response_json, list)
+    assert len(response_json) == 2
+    
+    # Check each prediction in the response
+    for i, pred_response in enumerate(response_json):
+        assert pred_response["model_id"] == model_id
+        assert pred_response["prediction"] == expected_predictions[i]
+    
     # Verify calls
     mock_load_model.assert_called_once_with(model_id)
     mock_load_meta.assert_called_once_with(model_id)
-    mock_classify.assert_called_once_with(mock_model_obj, features_dict, "target")
+    assert mock_classify.call_count == 2
+    mock_classify.assert_any_call(mock_model_obj, feature_sets[0], "target")
+    mock_classify.assert_any_call(mock_model_obj, feature_sets[1], "target")
 
 
 def test_predict_model_not_found(client: TestClient, mocker: MockerFixture):
     """Test POST /predict/ returns 404 if model not found."""
     model_id = "ghost_predictor"
-    request_data = {"model_id": model_id, "features": {"f": 1}}
+    request_data = {"model_id": model_id, "features": [{"f": 1}]}
     mock_load_model = mocker.patch(
         "src.api.api.load_model", side_effect=FileNotFoundError("Not here")
     )
@@ -297,7 +311,7 @@ def test_predict_model_not_found(client: TestClient, mocker: MockerFixture):
 
 def test_predict_value_error(client: TestClient, mocker: MockerFixture):
     model_id = "value_err_model"
-    request_data = {"model_id": model_id, "features": {"f": "bad_type"}}
+    request_data = {"model_id": model_id, "features": [{"f": "bad_type"}]}
 
     mocker.patch("src.api.api.load_model", return_value=mocker.MagicMock())
     mocker.patch("src.api.api.load_model_metadata", return_value=mocker.MagicMock())
@@ -320,10 +334,18 @@ def test_predict_invalid_request_body(client: TestClient):
     response = client.post("/predict/", json=invalid_request_data)
     assert response.status_code == 422  # Pydantic validation error
 
-    # Invalid data type for features (should be dict)
+    # Invalid data type for features (should be list of dict)
     invalid_request_data_2 = {
         "model_id": "some_model",
-        "features": ["list", "not", "dict"],
+        "features": "not-a-list"
     }
     response_2 = client.post("/predict/", json=invalid_request_data_2)
     assert response_2.status_code == 422
+    
+    # Empty features list
+    invalid_request_data_3 = {
+        "model_id": "some_model",
+        "features": []
+    }
+    response_3 = client.post("/predict/", json=invalid_request_data_3)
+    assert response_3.status_code == 422
