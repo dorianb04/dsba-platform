@@ -14,11 +14,48 @@ This project provides a basic framework to:
 
 ## Project Structure
 
+```bash
+Directory structure:
+└── dorianb04-dsba-platform/
+    ├── README.md
+    ├── pyproject.toml
+    ├── .pre-commit-config.yaml
+    ├── src/
+    │   ├── api/
+    │   │   ├── api.py
+    │   │   └── Dockerfile
+    │   ├── cli/
+    │   │   ├── __init__.py
+    │   │   └── dsba_cli.py
+    │   ├── dsba/
+    │   │   ├── __init__.py
+    │   │   ├── config.py
+    │   │   ├── model_evaluation.py
+    │   │   ├── model_prediction.py
+    │   │   ├── model_registry.py
+    │   │   ├── model_training.py
+    │   │   ├── preprocessing.py
+    │   │   └── data_ingestion/
+    │   │       ├── __init__.py
+    │   │       ├── databases.py
+    │   │       └── files.py
+    │   └── notebooks/
+    │       └── model_training_example.ipynb
+    └── tests/
+        ├── __init__.py
+        ├── test_api.py
+        ├── test_cli.py
+        ├── test_model_registry.py
+        ├── test_model_training.py
+        └── data/
+            └── sample_training_data.csv
+```
+
 * `pyproject.toml`: Defines project metadata, dependencies (main and dev), and build system (hatchling).
 * `.env.example`: Template showing required environment variables for local development.
 * `src/`: Contains all source code.
     * `api/`: FastAPI application (`api.py`) and its `Dockerfile`.
-    * `cli/`: Command-line interface (`main.py`) and its `__init__.py`.
+    * `cli/`: Command-line interface (`cli.py`) and its `__init__.py`.
     * `dsba/`: Core library code (data ingestion, model registry, training, prediction, config, etc.).
     * `notebooks/`: Example Jupyter notebooks (e.g., `model_training_example.ipynb`).
 * `tests/`: Contains pytest unit and integration tests.
@@ -76,24 +113,13 @@ This project uses environment variables for configuration, primarily for the mod
     ```dotenv
     # Content of .env file
     # Use absolute path or a path relative to the project root
-    DSBA_MODELS_ROOT_PATH=models_registry
+    DSBA_MODELS_ROOT_PATH=models/registry
     ```
 3.  **Ensure `.gitignore`:** Verify that `.env` is listed in your `.gitignore` file.
 
 *Note: The `src/dsba/config.py` script uses `python-dotenv` to automatically load variables from the `.env` file when running locally.*
 
-## Step 3: Code Setup
-
-Ensure your codebase includes the necessary updates and refactoring applied during development:
-
-* `src/dsba/config.py`: Relies only on the `DSBA_MODELS_ROOT_PATH` environment variable.
-* `src/cli/dsba_cli` is renamed to `src/cli/main.py`.
-* `src/cli/__init__.py` exists (can be empty).
-* `src/dsba/model_training.py`: Uses helper functions and calls `data_ingestion` correctly.
-* `src/api/api.py`: Uses Pydantic models and has proper error handling.
-* `src/api/Dockerfile`: Copies source files correctly before `pip install`.
-
-## Step 4: Local Usage Verification
+## Step 3: Local Usage Verification
 
 Ensure your virtual environment is active and the `DSBA_MODELS_ROOT_PATH` is set in your `.env` file.
 
@@ -103,16 +129,16 @@ Ensure your virtual environment is active and the `DSBA_MODELS_ROOT_PATH` is set
     python src/cli/main.py list
 
     # Train a sample model
-    python src/cli/main.py train --model-id local_sample_v1 --data-source tests/data/sample_training_data.csv --target-column target
+    python src/cli/cli.py train --model-id local_sample_v1 --data-source tests/data/sample_training_data.csv --target-column target
 
     # List models again
-    python src/cli/main.py list
+    python src/cli/cli.py list
 
     # Get metadata
-    python src/cli/main.py metadata local_sample_v1
+    python src/cli/cli.py metadata local_sample_v1
 
     # Predict using the trained model
-    python src/cli/main.py predict --model-id local_sample_v1 --input tests/data/sample_training_data.csv --output local_predictions.csv
+    python src/cli/cli.py predict --model-id local_sample_v1 --input tests/data/sample_training_data.csv --output local_predictions.csv
     ```
     *Check the console output and the creation of files in your `models_registry` directory and `local_predictions.csv`.*
 
@@ -123,7 +149,7 @@ Ensure your virtual environment is active and the `DSBA_MODELS_ROOT_PATH` is set
     *Open `http://127.0.0.1:8000/docs` in your browser to interact with the API via Swagger UI.*
     *Stop the server with `CTRL+C`.*
 
-## Step 5: Dockerize the API
+## Step 4: Dockerize the API
 
 1.  **Ensure Docker Desktop is running.**
 2.  **Build the Image:** (Run from project root)
@@ -131,7 +157,7 @@ Ensure your virtual environment is active and the `DSBA_MODELS_ROOT_PATH` is set
     docker build -t dsba-platform-api:latest -f src/api/Dockerfile .
     ```
 
-## Step 6: Prepare for Azure Deployment
+## Step 5: Prepare for Azure Deployment
 
 1.  **Set up Azure Container Registry (ACR):**
     * Choose a **globally unique name** for your ACR (e.g., `dsbamlops<random_number>`).
@@ -167,14 +193,14 @@ Ensure your virtual environment is active and the `DSBA_MODELS_ROOT_PATH` is set
     docker push $ACR_IMAGE_NAME
     ```
 
-## Step 7: Azure Deployment via CLI
+## Step 6: Azure Deployment via CLI
 
 This will deploy the container image to Azure Container Instances (ACI) with persistent storage for models using Azure Files.
 
 1.  **Define Deployment Variables:**
     ```powershell
     # Use the $RESOURCE_GROUP, $LOCATION, $ACR_NAME defined previously
-    $ACI_NAME="dsba-api-instance-$(Get-Random -Maximum 1000)"       # Unique name for ACI
+    $ACI_NAME="dsba-api-instance-$(Get-Random -Maximum 1000)"      # Unique name for ACI
     $STORAGE_ACCOUNT_NAME="dsbastorage$(Get-Random)"               # Globally unique storage name
     $MODELS_SHARE_NAME="modelshare"                                # File share ONLY for models
     $DNS_NAME_LABEL="dsba-mlops-api-$(Get-Random -Maximum 1000)"   # Globally unique DNS label
@@ -188,7 +214,7 @@ This will deploy the container image to Azure Container Instances (ACI) with per
     az storage account create --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP --location $LOCATION --sku Standard_LRS --kind StorageV2
     ```
 
-3.  **Get Storage Account Key:** *(Handle Securely!)*
+3.  **Get Storage Account Key:**
     ```powershell
     Write-Host "Retrieving storage account key..."
     $STORAGE_KEY = (az storage account keys list --resource-group $RESOURCE_GROUP --account-name $STORAGE_ACCOUNT_NAME --query "[0].value" --output tsv)
@@ -235,25 +261,26 @@ This will deploy the container image to Azure Container Instances (ACI) with per
     ```
     *Wait for the deployment to complete.*
 
-## Step 8: Verification
+## Step 7: Verification
 
 1.  **Get FQDN:**
     ```powershell
     Write-Host "Getting container FQDN..."
-    az container wait --resource-group $RESOURCE_GROUP --name $ACI_NAME --created
-    $FQDN = (az container show --resource-group $RESOURCE_GROUP --name $ACI_NAME --query "ipAddress.fqdn" --output tsv)
-    if ($FQDN) {
-        $API_URL="http://$($FQDN):8000"
-        Write-Host "-----------------------------------------------------" -ForegroundColor Green
-        Write-Host "Deployment Successful!" -ForegroundColor Green
-        Write-Host "API URL: $API_URL"
-        Write-Host "Swagger UI: $API_URL/docs"
-        Write-Host "-----------------------------------------------------" -ForegroundColor Green
-    } else { Write-Error "Could not retrieve FQDN." }
+   $FQDN = (az container show --resource-group $RESOURCE_GROUP --name $ACI_NAME --query "ipAddress.fqdn" --output tsv)
+   if ($FQDN) {
+       $API_URL="http://$($FQDN):8000"
+       Write-Host "-----------------------------------------------------" -ForegroundColor Green
+       Write-Host "Deployment Succeeded and Container is Running!" -ForegroundColor Green
+       Write-Host "API URL: $API_URL"
+       Write-Host "Swagger UI: $API_URL/docs"
+       Write-Host "-----------------------------------------------------" -ForegroundColor Green
+   } else {
+       Write-Error "Container is Running but could not retrieve FQDN."
+   }
     ```
 2.  **Test API:** Open the **Swagger UI URL** in your browser. Use the interface or tools like `curl`/Python client to interact with your deployed API endpoints. Train a model via the API and verify it appears in your Azure File Share (`modelshare`).
 
-## Step 9: Clean Up (Optional)
+## Step 8: Clean Up (Optional)
 
 * When finished, delete the Azure resources to avoid ongoing costs:
     ```powershell
