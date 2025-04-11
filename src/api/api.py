@@ -37,14 +37,14 @@ class TrainRequest(BaseModel):
     model_id: str = Field(
         ...,
         description="Unique identifier for the model to be trained.",
-        json_schema_extra={"examples": ["titanic_classifier_v2"]},
+        json_schema_extra={"examples": ["titanic_classifier"]},
     )
     data_source: HttpUrl | str = Field(
         ...,
         description="URL (http/https) or local path to the CSV training data.",
         json_schema_extra={
             "examples": [
-                "tests/data/sample_training_data.csv",
+                "https://raw.githubusercontent.com/datasciencedojo/datasets/refs/heads/master/titanic.csv",
                 "https://example.com/data.csv",
             ]
         },
@@ -63,44 +63,29 @@ class PredictRequest(BaseModel):
     model_id: str = Field(
         ...,
         description="ID of the trained model for prediction.",
-        json_schema_extra={"examples": ["titanic_classifier_v2"]},
+        json_schema_extra={"examples": ["titanic_classifier"]},
     )
     features: list[dict[str, Any]] = Field(
         ...,
-        description="List of dictionaries where each dictionary represents a set of features for prediction.",
+        description="List of dictionaries where each dictionary"
+        " represents a set of features for prediction.",
         json_schema_extra={
             "examples": [
-                [[
-  {
-    "PassengerId": 1,
-    "Survived": 0,
-    "Pclass": 3,
-    "Name": "Braund, Mr. Owen Harris",
-    "Sex": "male",
-    "Age": 22,
-    "SibSp": 1,
-    "Parch": 0,
-    "Ticket": "A/5 21171",
-    "Fare": 7.25,
-    "Cabin": "",
-    "Embarked": "S"
-  },
-  {
-    "PassengerId": 2,
-    "Survived": 1,
-    "Pclass": 1,
-    "Name": "Cumings, Mrs. John Bradley (Florence Briggs Thayer)",
-    "Sex": "female",
-    "Age": 38,
-    "SibSp": 1,
-    "Parch": 0,
-    "Ticket": "PC 17599",
-    "Fare": 71.2833,
-    "Cabin": "C85",
-    "Embarked": "C"
-  }
-]
-]]
+                [
+                    {
+                        "feature1": "value1",
+                        "feature2": 1,
+                        "feature3": True,
+                        "feature4": 0,
+                    },
+                    {
+                        "feature1": "value2",
+                        "feature2": 2,
+                        "feature3": False,
+                        "feature4": -1,
+                    },
+                ]
+            ]
         },
     )
 
@@ -282,7 +267,7 @@ async def train_model_api(request: TrainRequest):
 async def predict_api(request: PredictRequest):
     """
     Makes predictions for a list of data records using a specified model ID.
-    Input features should be provided as a list of dictionaries in the JSON request body.
+    Input features should be provided as a list of dictionaries in the JSON payload.
     """
     logger.info(f"Received prediction request for model_id: {request.model_id}")
     try:
@@ -291,18 +276,22 @@ async def predict_api(request: PredictRequest):
         metadata = load_model_metadata(request.model_id)
 
         predictions = []
-        
+
         # Iterate over the list of feature sets and classify each record
         for feature_set in request.features:
             prediction = classify_record(model, feature_set, metadata.target_column)
-            predictions.append(PredictResponse(model_id=request.model_id, prediction=prediction))
+            predictions.append(
+                PredictResponse(model_id=request.model_id, prediction=prediction)
+            )
 
         logger.info(f"Prediction successful for {len(request.features)} records.")
 
         return predictions
 
     except FileNotFoundError as e:
-        logger.warning(f"Model or metadata not found for prediction: {request.model_id}")
+        logger.warning(
+            f"Model or metadata not found for prediction: {request.model_id}"
+        )
         raise HTTPException(
             status_code=404,
             detail=f"Model (or its metadata) not found for ID: {request.model_id}",
@@ -313,7 +302,9 @@ async def predict_api(request: PredictRequest):
             status_code=400, detail=f"Prediction input data error: {e!s}"
         ) from e
     except Exception as e:
-        logger.exception(f"Unexpected error during prediction for model {request.model_id}.")
+        logger.exception(
+            f"Unexpected error during prediction for model {request.model_id}."
+        )
         raise HTTPException(
             status_code=500, detail=f"Internal server error during prediction: {e!s}"
         ) from e
