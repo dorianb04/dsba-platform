@@ -1,20 +1,20 @@
-# Base Python image (Python 3.12)
 FROM python:3.12-slim
 
-# Set working directory
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Set the working directory in the container
 WORKDIR /app
 
-# Copy all files into container
-COPY . /app
+COPY pyproject.toml README.md ./
+COPY ./src ./src
+RUN mkdir -p /app/models/registry
 
-# Install your package (assuming pyproject.toml exists in root and project uses PEP 517/518 standards)
-RUN pip install .
+# Install dependencies AND the project itself from the current directory (.) in the container
+RUN pip install --no-cache-dir .
 
-# Expose FastAPI port
+# Expose the port the app runs on port 8000
 EXPOSE 8000
 
-# Environment variable (optional, but okay!)
-ENV DSBA_MODELS_ROOT_PATH=/app/models
-
-# Run FastAPI using Uvicorn
+# Define the command to run the application using Uvicorn
 CMD ["uvicorn", "src.api.api:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -7,7 +7,7 @@ import logging
 import sys
 from pathlib import Path
 
-from dsba.config import get_models_root_path, load_config
+from dsba.config import get_models_root_path
 from dsba.data_ingestion import load_csv_from_path, write_csv_to_path
 from dsba.model_prediction import classify_dataframe
 from dsba.model_registry import (
@@ -213,7 +213,6 @@ def main():
     """Main entry point for the CLI."""
     # Initialize: Check config first
     try:
-        load_config()
         models_path = get_models_root_path()
         logger.info(f"Using model registry at: {models_path}")
     except (FileNotFoundError, ValueError, NotADirectoryError) as e:

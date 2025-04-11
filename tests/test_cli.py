@@ -27,7 +27,6 @@ def mock_cli_config(tmp_path: Path, mocker: MockerFixture):
     models_dir = tmp_path / "cli_test_registry"
     models_dir.mkdir()
     mocker.patch("dsba.config.get_models_root_path", return_value=models_dir)
-    mocker.patch("dsba.config.load_config", return_value={})
     yield models_dir
 
 
