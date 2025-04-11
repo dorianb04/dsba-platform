@@ -72,6 +72,8 @@ Ensure the following software is installed on your system:
 3.  **Docker Desktop:** Install and ensure the Docker engine is running ([docker.com](https://www.docker.com/products/docker-desktop/)).
 4.  **Azure CLI:** Install and login ([docs.microsoft.com](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)). Run `az login`.
 
+> **Note:** All of the commands below are described using **PowerShell** syntax (e.g., for variable definition `$VarName = "value"` and line continuation `` ` ``) and therefore need to be for **Bash** or **Zsh**.
+
 ## Step 1: Local Setup
 
 1.  **Fork & Clone:** Fork this repository on GitHub, then clone your fork:
