@@ -52,7 +52,7 @@ class TrainRequest(BaseModel):
     target_column: str = Field(
         ...,
         description="Name of the target variable column.",
-        json_schema_extra={"examples": ["target"]},
+        json_schema_extra={"examples": ["Survived"]},
     )
     test_size: float | None = Field(
         0.2, gt=0, lt=1, description="Proportion of data for testing (0 < size < 1)."
@@ -63,16 +63,44 @@ class PredictRequest(BaseModel):
     model_id: str = Field(
         ...,
         description="ID of the trained model for prediction.",
-        json_schema_extra={"examples": ["churn_model"]},
+        json_schema_extra={"examples": ["titanic_classifier_v2"]},
     )
     features: list[dict[str, Any]] = Field(
         ...,
         description="List of dictionaries where each dictionary represents a set of features for prediction.",
         json_schema_extra={
             "examples": [
-                {"CustomerId": 15773898, "CreditScore": 586, "Geography": "France", "Age": 23.0, "Tenure": 2, "Balance": 0.0, "NumOfProducts": 2, "HasCrCard": 0.0, "IsActiveMember": 1.0, "EstimatedSalary": 160976.75},
-                {"CustomerId": 15773900, "CreditScore": 650, "Geography": "Germany", "Age": 35.0, "Tenure": 5, "Balance": 1000.0, "NumOfProducts": 1, "HasCrCard": 1.0, "IsActiveMember": 1.0, "EstimatedSalary": 120000.00}
-            ]
+                [[
+  {
+    "PassengerId": 1,
+    "Survived": 0,
+    "Pclass": 3,
+    "Name": "Braund, Mr. Owen Harris",
+    "Sex": "male",
+    "Age": 22,
+    "SibSp": 1,
+    "Parch": 0,
+    "Ticket": "A/5 21171",
+    "Fare": 7.25,
+    "Cabin": "",
+    "Embarked": "S"
+  },
+  {
+    "PassengerId": 2,
+    "Survived": 1,
+    "Pclass": 1,
+    "Name": "Cumings, Mrs. John Bradley (Florence Briggs Thayer)",
+    "Sex": "female",
+    "Age": 38,
+    "SibSp": 1,
+    "Parch": 0,
+    "Ticket": "PC 17599",
+    "Fare": 71.2833,
+    "Cabin": "C85",
+    "Embarked": "C"
+  }
+]
+]]
         },
     )
 
