@@ -63,13 +63,16 @@ class PredictRequest(BaseModel):
     model_id: str = Field(
         ...,
         description="ID of the trained model for prediction.",
-        json_schema_extra={"examples": ["titanic_classifier_v2"]},
+        json_schema_extra={"examples": ["churn_model"]},
     )
-    features: dict[str, Any] = Field(
+    features: list[dict[str, Any]] = Field(
         ...,
-        description="Dictionary of feature names and values for prediction.",
+        description="List of dictionaries where each dictionary represents a set of features for prediction.",
         json_schema_extra={
-            "examples": [{"feature1": 2.5, "feature2": "A", "feature3": 3.1}]
+            "examples": [
+                {"CustomerId": 15773898, "CreditScore": 586, "Geography": "France", "Age": 23.0, "Tenure": 2, "Balance": 0.0, "NumOfProducts": 2, "HasCrCard": 0.0, "IsActiveMember": 1.0, "EstimatedSalary": 160976.75},
+                {"CustomerId": 15773900, "CreditScore": 650, "Geography": "Germany", "Age": 35.0, "Tenure": 5, "Balance": 1000.0, "NumOfProducts": 1, "HasCrCard": 1.0, "IsActiveMember": 1.0, "EstimatedSalary": 120000.00}
+            ]
         },
     )
 
@@ -240,7 +243,7 @@ async def train_model_api(request: TrainRequest):
 # Using POST is generally better for sending data (features)
 @app.post(
     "/predict/",
-    response_model=PredictResponse,  # Use Pydantic response model
+    response_model=list[PredictResponse],  # Updated to return a list of predictions
     tags=["Prediction"],
     responses={
         404: {"description": "Model not found"},
@@ -248,30 +251,30 @@ async def train_model_api(request: TrainRequest):
         500: {"description": "Prediction failed"},
     },
 )
-# Use Pydantic model for request body
 async def predict_api(request: PredictRequest):
     """
-    Makes a prediction for a single data record using a specified model ID.
-    Input features should be provided as a dictionary in the JSON request body.
+    Makes predictions for a list of data records using a specified model ID.
+    Input features should be provided as a list of dictionaries in the JSON request body.
     """
     logger.info(f"Received prediction request for model_id: {request.model_id}")
     try:
         # Load model and metadata
         model = load_model(request.model_id)
-        # Metadata needed only for target column name if classify_record requires it
-        # It might be more efficient if classify_record doesn't need metadata
         metadata = load_model_metadata(request.model_id)
-        prediction = classify_record(model, request.features, metadata.target_column)
-        logger.info(
-            f"Prediction successful for model {request.model_id}. Result: {prediction}"
-        )
 
-        return PredictResponse(model_id=request.model_id, prediction=prediction)
+        predictions = []
+        
+        # Iterate over the list of feature sets and classify each record
+        for feature_set in request.features:
+            prediction = classify_record(model, feature_set, metadata.target_column)
+            predictions.append(PredictResponse(model_id=request.model_id, prediction=prediction))
+
+        logger.info(f"Prediction successful for {len(request.features)} records.")
+
+        return predictions
 
     except FileNotFoundError as e:
-        logger.warning(
-            f"Model or metadata not found for prediction: {request.model_id}"
-        )
+        logger.warning(f"Model or metadata not found for prediction: {request.model_id}")
         raise HTTPException(
             status_code=404,
             detail=f"Model (or its metadata) not found for ID: {request.model_id}",
@@ -282,9 +285,7 @@ async def predict_api(request: PredictRequest):
             status_code=400, detail=f"Prediction input data error: {e!s}"
         ) from e
     except Exception as e:
-        logger.exception(
-            f"Unexpected error during prediction for model {request.model_id}."
-        )
+        logger.exception(f"Unexpected error during prediction for model {request.model_id}.")
         raise HTTPException(
             status_code=500, detail=f"Internal server error during prediction: {e!s}"
         ) from e
