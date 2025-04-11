@@ -289,6 +289,10 @@ Swagger UI: http://dsba-mlops-api-12.francecentral.azurecontainer.io:8000/docs
 -----------------------------------------------------
 ```
 
+Here is an example of what you should see:
+
+![Swagger UI](images/swagger_example.png)
+
 ## Step 8: Clean Up (Optional)
 
 * When finished, delete the Azure resources to avoid ongoing costs:
@@ -296,6 +300,8 @@ Swagger UI: http://dsba-mlops-api-12.francecentral.azurecontainer.io:8000/docs
     Write-Host "Deleting resource group $RESOURCE_GROUP and all its resources..."
     az group delete --name $RESOURCE_GROUP --yes --no-wait
     ```
+
+
 
 ## Testing
 
