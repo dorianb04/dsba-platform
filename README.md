@@ -266,17 +266,17 @@ This will deploy the container image to Azure Container Instances (ACI) with per
 1.  **Get FQDN:**
     ```powershell
     Write-Host "Getting container FQDN..."
-   $FQDN = (az container show --resource-group $RESOURCE_GROUP --name $ACI_NAME --query "ipAddress.fqdn" --output tsv)
-   if ($FQDN) {
+    $FQDN = (az container show --resource-group $RESOURCE_GROUP --name $ACI_NAME --query "ipAddress.fqdn" --output tsv)
+    if ($FQDN) {
        $API_URL="http://$($FQDN):8000"
        Write-Host "-----------------------------------------------------" -ForegroundColor Green
        Write-Host "Deployment Succeeded and Container is Running!" -ForegroundColor Green
        Write-Host "API URL: $API_URL"
        Write-Host "Swagger UI: $API_URL/docs"
        Write-Host "-----------------------------------------------------" -ForegroundColor Green
-   } else {
+    } else {
        Write-Error "Container is Running but could not retrieve FQDN."
-   }
+    }
     ```
 2.  **Test API:** Open the **Swagger UI URL** in your browser. Use the interface or tools like `curl`/Python client to interact with your deployed API endpoints. Train a model via the API and verify it appears in your Azure File Share (`modelshare`).
 
